@@ -12,9 +12,7 @@ Pull requests are encouraged! To increase the likelihood of your PR being pulled
   - Version 20+ will uses spaces
   - This guideline will be updated when version 20 becomes generally available
 
-- Do not change version in pom.xml.
-
-- Feel free to contribute to the dev/v20 branch (may be advised to discuss in #63)
+- Do not change version in pom.xml
 
 ## Tips
 - Avoid nesting - check for the inverted value and return early (not easy to do though in legacy versions where many methods are "uber methods" containing a lot of control flow).

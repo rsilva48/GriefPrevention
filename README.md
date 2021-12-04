@@ -13,7 +13,7 @@ I hope life is treating you well, there certainly are times when it's hard to ma
 Regards and apologies,  
 Adam
 
-# GriefPrevention - The self-service anti-griefing Bukkit plugin for Minecraft servers since 2011.
+# GamerProtection - A GriefPrevention fork
 
 Stop responding to grief and prevent it instead. GriefPrevention stops grief 
 before it starts automatically without any effort from administrators, 
@@ -23,48 +23,38 @@ training manual or tutorial for players, or add explanatory signs to your world.
 
 > GriefPrevention is a Bukkit plugin, therefore it is compatible with any implemention of the Bukkit API. Implementations include CraftBukkit, Spigot, Paper, Tuinity, Purpur, etc.
 
-- [Downloads](https://dev.bukkit.org/projects/grief-prevention/files)
-- [Release Notes](https://github.com/TechFortress/GriefPrevention/releases)
+- [Downloads](https://github.com/Easterlyn/GamerProtection/releases)
+- [Dev Builds](https://ci.appveyor.com/project/Jikoo/gamerprotection) - Navigate to the Artifacts tab.
 
-## Help+Support
+## Help and Support
 
-- **[Documentation (The Manual)](https://docs.griefprevention.com)** - Check here first! This contains the list of commands, permissions, configurations, answers to common questions, etc.
-- [Issue Tracker](https://github.com/TechFortress/GriefPrevention/issues) - For reporting bugs
-- [Discussions](https://github.com/TechFortress/GriefPrevention/discussions) - For asking questions, suggesting new ideas/features, and general discussion
-
-Community support and general discussion on GriefPrevention can be found at these sites:
-
-- [GitHub Discussions](https://github.com/TechFortress/GriefPrevention/discussions)
-- [#GriefPrevention chat channel on IRC or discord](https://griefprevention.com/chat)
-- [Grief Prevention on dev.bukkit.org](https://dev.bukkit.org/projects/grief-prevention)
-- [GriefPrevention on spigotmc.org](https://www.spigotmc.org/resources/griefprevention.1884/)
+Please do not seek support for GamerProtection in the GriefPrevention repository! Please use [Issues](https://github.com/Easterlyn/GamerProtection/issues) or [Discussions](https://github.com/Easterlyn/GamerProtection/discussions).
 
 ---
 
-### Adding GriefPrevention as a maven/gradle/etc. dependency
+### Adding GamerProtection as a maven/gradle/etc. dependency
 
-GriefPrevention will be added to maven central soon - in the meantime, there's this neat thing called JitPack [![](https://jitpack.io/v/TechFortress/GriefPrevention.svg)](https://jitpack.io/#TechFortress/GriefPrevention) that makes a public maven repo for public Github repos on the fly.
-According to it, this is all you need to do to add to your pom.xml:
+GamerProtection is available via [JitPack](https://jitpack.io/).
 ```xml
-	<repositories>
-		<repository>
-		    <id>jitpack.io</id>
-		    <url>https://jitpack.io</url>
-		</repository>
-	</repositories>
+  <repositories>
+    <repository>
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+  </repositories>
 ```
 
-Replace `<version>` number with this number: [![](https://jitpack.io/v/TechFortress/GriefPrevention.svg)](https://jitpack.io/#TechFortress/GriefPrevention)
+Replace `${gamerprotection.version}` number with the current version: [![](https://jitpack.io/v/Easterlyn/GamerProtection.svg)](https://jitpack.io/#Easterlyn/GamerProtection)
 ```xml
-	<dependency>
-	    <groupId>com.github.TechFortress</groupId>
-	    <artifactId>GriefPrevention</artifactId>
-	    <version>16.17.1</version>
-        <scope>provided</scope>
-	</dependency>
+    <dependency>
+      <groupId>com.github.Easterlyn</groupId>
+      <artifactId>GamerProtection</artifactId>
+      <version>${gamerprotection.version}</version>
+      <scope>provided</scope>
+    </dependency>
 ```
 
-You can also add it to gradle/sbt/leiningen projects: https://jitpack.io/#TechFortress/GriefPrevention/
+You can also add it to gradle/sbt/leiningen projects. For more information, see https://jitpack.io/#Easterlyn/GamerProtection/
 
 ---
 
