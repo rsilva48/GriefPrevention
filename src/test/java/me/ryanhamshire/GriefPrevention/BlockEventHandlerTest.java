@@ -1,5 +1,7 @@
 package me.ryanhamshire.GriefPrevention;
 
+import com.griefprevention.util.persistence.DataKeys;
+import com.griefprevention.util.persistence.DataTypes;
 import org.bukkit.Bukkit;
 import org.bukkit.Server;
 import org.bukkit.entity.Item;
@@ -7,11 +9,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.metadata.FixedMetadataValue;
-import org.bukkit.plugin.Plugin;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
@@ -30,9 +30,10 @@ public class BlockEventHandlerTest
         // Verify that we don't cancel events for unprotected items.
 
         Item item = mock(Item.class);
+        PersistentDataContainer container = mock(PersistentDataContainer.class);
+        when(item.getPersistentDataContainer()).thenReturn(container);
         Inventory inventory = mock(Inventory.class);
         InventoryPickupItemEvent event = mock(InventoryPickupItemEvent.class);
-        when(item.getMetadata("GP_ITEMOWNER")).thenReturn(List.of());
         when(inventory.getType()).thenReturn(InventoryType.HOPPER);
         when(event.getItem()).thenReturn(item);
         when(event.getInventory()).thenReturn(inventory);
@@ -49,8 +50,9 @@ public class BlockEventHandlerTest
         // Verify that we DO cancel events for items that are protected.
 
         Item item = mock(Item.class);
-        when(item.getMetadata("GP_ITEMOWNER"))
-                .thenReturn(List.of(new FixedMetadataValue(mock(Plugin.class), PLAYER_UUID)));
+        PersistentDataContainer container = mock(PersistentDataContainer.class);
+        when(item.getPersistentDataContainer()).thenReturn(container);
+        when(container.get(DataKeys.PROTECTED_ITEM, DataTypes.UUID)).thenReturn(PLAYER_UUID);
         Inventory inventory = mock(Inventory.class);
         when(inventory.getType()).thenReturn(InventoryType.HOPPER);
         DataStore dataStore = mock(DataStore.class);
@@ -80,8 +82,9 @@ public class BlockEventHandlerTest
         // This behaviour matches older versions of GriefPrevention.
 
         Item item = mock(Item.class);
-        when(item.getMetadata("GP_ITEMOWNER"))
-                .thenReturn(List.of(new FixedMetadataValue(mock(Plugin.class), PLAYER_UUID)));
+        PersistentDataContainer container = mock(PersistentDataContainer.class);
+        when(item.getPersistentDataContainer()).thenReturn(container);
+        when(container.get(DataKeys.PROTECTED_ITEM, DataTypes.UUID)).thenReturn(PLAYER_UUID);
         Inventory inventory = mock(Inventory.class);
         when(inventory.getType()).thenReturn(InventoryType.HOPPER);
         BlockEventHandler handler = new BlockEventHandler(null);

@@ -1,9 +1,12 @@
 package me.ryanhamshire.GriefPrevention;
 
+import com.griefprevention.util.persistence.DataKeys;
+import com.griefprevention.util.persistence.DataTypes;
 import me.ryanhamshire.GriefPrevention.events.PreventPvPEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.AnimalTamer;
 import org.bukkit.entity.Animals;
 import org.bukkit.entity.Creature;
@@ -27,6 +30,7 @@ import org.bukkit.entity.Raider;
 import org.bukkit.entity.Slime;
 import org.bukkit.entity.Tameable;
 import org.bukkit.entity.ThrownPotion;
+import org.bukkit.entity.Trident;
 import org.bukkit.entity.Vex;
 import org.bukkit.entity.Zombie;
 import org.bukkit.entity.minecart.ExplosiveMinecart;
@@ -43,6 +47,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -148,7 +153,7 @@ public class EntityDamageHandler implements Listener
         //protected death loot can't be destroyed, only picked up or despawned due to expiration
         if (event.getEntityType() == EntityType.DROPPED_ITEM)
         {
-            if (event.getEntity().hasMetadata("GP_ITEMOWNER"))
+            if (event.getEntity().getPersistentDataContainer().has(DataKeys.PROTECTED_ITEM, DataTypes.UUID))
             {
                 event.setCancelled(true);
             }
@@ -162,12 +167,6 @@ public class EntityDamageHandler implements Listener
 
         //the rest is only interested in entities damaging entities (ignoring environmental damage)
         if (!(event instanceof EntityDamageByEntityEvent subEvent)) return;
-
-        if (subEvent.getDamager() instanceof LightningStrike && subEvent.getDamager().hasMetadata("GP_TRIDENT"))
-        {
-            event.setCancelled(true);
-            return;
-        }
 
         //determine which player is attacking, if any
         Player attacker = null;
@@ -183,6 +182,29 @@ public class EntityDamageHandler implements Listener
             if (arrow.getShooter() instanceof Player shooter)
             {
                 attacker = shooter;
+            }
+        }
+        else if (damageSource instanceof LightningStrike)
+        {
+            // Due to the fact that lightning strikes do AoE damage, do not send messages to prevent spam.
+            sendMessages = false;
+
+            // Check nearby entities.
+            Collection<Entity> nearby = damageSource.getWorld().getNearbyEntities(BoundingBox.of(damageSource.getLocation(), 0.1D, 0.1D, 0.1D));
+            for (Entity entity : nearby)
+            {
+                // If the entity is a trident with the Channeling enchantment, it is likely to be the source.
+                // Worst case scenario, two or more players have thrown channeling tridents at the same place.
+                // If one player is allowed, we might find their trident first both times and allow extra strikes.
+                if (entity instanceof Trident trident && trident.getItem().containsEnchantment(Enchantment.CHANNELING))
+                {
+                    arrow = trident;
+                    if (trident.getShooter() instanceof Player shooter)
+                    {
+                        attacker = shooter;
+                    }
+                    break;
+                }
             }
         }
 

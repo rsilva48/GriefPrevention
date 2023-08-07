@@ -18,6 +18,8 @@
 
 package me.ryanhamshire.GriefPrevention;
 
+import com.griefprevention.util.persistence.DataKeys;
+import com.griefprevention.util.persistence.DataTypes;
 import com.griefprevention.visualization.BoundaryVisualization;
 import com.griefprevention.visualization.VisualizationType;
 import me.ryanhamshire.GriefPrevention.events.ClaimInspectionEvent;
@@ -88,6 +90,7 @@ import org.bukkit.event.raid.RaidTriggerEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -823,7 +826,8 @@ class PlayerEventHandler implements Listener
         new IgnoreLoaderThread(playerID, playerData.ignoredPlayers).start();
 
         //is he stuck in a portal frame?
-        if (player.hasMetadata("GP_PORTALRESCUE"))
+        Location portalRescueLocation = player.getPersistentDataContainer().get(DataKeys.PORTAL_TRAP, DataTypes.LOCATION);
+        if (portalRescueLocation != null)
         {
             //If so, let him know and rescue him in 10 seconds. If he is in fact not trapped, hopefully chunks will have loaded by this time so he can walk out.
             GriefPrevention.sendMessage(player, TextMode.Info, Messages.NetherPortalTrapDetectionMessage, 20L);
@@ -832,11 +836,12 @@ class PlayerEventHandler implements Listener
                 @Override
                 public void run()
                 {
-                    if (player.getPortalCooldown() > 8 && player.hasMetadata("GP_PORTALRESCUE"))
+                    PersistentDataContainer container = player.getPersistentDataContainer();
+                    if (player.getPortalCooldown() > 0 && portalRescueLocation.equals(container.get(DataKeys.PORTAL_TRAP, DataTypes.LOCATION)))
                     {
-                        GriefPrevention.AddLogEntry("Rescued " + player.getName() + " from a nether portal.\nTeleported from " + player.getLocation().toString() + " to " + ((Location) player.getMetadata("GP_PORTALRESCUE").get(0).value()).toString(), CustomLogEntryTypes.Debug);
-                        player.teleport((Location) player.getMetadata("GP_PORTALRESCUE").get(0).value());
-                        player.removeMetadata("GP_PORTALRESCUE", instance);
+                        GriefPrevention.AddLogEntry("Rescued " + player.getName() + " from a nether portal.\nTeleported from " + player.getLocation() + " to " + portalRescueLocation, CustomLogEntryTypes.Debug);
+                        player.teleport(portalRescueLocation);
+                        container.remove(DataKeys.PORTAL_TRAP);
                     }
                 }
             }.runTaskLater(instance, 200L);
@@ -927,10 +932,9 @@ class PlayerEventHandler implements Listener
         boolean isBanned;
 
         //If player is not trapped in a portal and has a pending rescue task, remove the associated metadata
-        //Why 9? No idea why, but this is decremented by 1 when the player disconnects.
-        if (player.getPortalCooldown() < 9)
+        if (player.getPortalCooldown() < 1)
         {
-            player.removeMetadata("GP_PORTALRESCUE", instance);
+            player.getPersistentDataContainer().remove(DataKeys.PORTAL_TRAP);
         }
 
         if (playerData.wasKicked)

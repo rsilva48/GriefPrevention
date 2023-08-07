@@ -18,10 +18,13 @@
 
 package me.ryanhamshire.GriefPrevention;
 
+import com.griefprevention.util.persistence.DataKeys;
+import com.griefprevention.util.persistence.DataTypes;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
-import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.jetbrains.annotations.NotNull;
 
 //players can be "trapped" in a portal frame if they don't have permission to break
 //solid blocks blocking them from exiting the frame
@@ -35,22 +38,30 @@ class CheckForPortalTrapTask extends BukkitRunnable
     //where to send the player back to if he hasn't left the portal frame
     private final Location returnLocation;
 
-    public CheckForPortalTrapTask(Player player, GriefPrevention plugin, Location locationToReturn)
+    public CheckForPortalTrapTask(
+            @NotNull Player player,
+            @NotNull GriefPrevention plugin,
+            @NotNull Location locationToReturn)
     {
         this.player = player;
         this.instance = plugin;
         this.returnLocation = locationToReturn;
-        player.setMetadata("GP_PORTALRESCUE", new FixedMetadataValue(instance, locationToReturn));
+        player.getPersistentDataContainer().set(DataKeys.PORTAL_TRAP, DataTypes.LOCATION, locationToReturn);
     }
 
     @Override
     public void run()
     {
-        if (player.isOnline() && player.getPortalCooldown() >= 10 && player.hasMetadata("GP_PORTALRESCUE"))
+        if (!player.isOnline() || player.getPortalCooldown() < 1)
         {
-            GriefPrevention.AddLogEntry("Rescued " + player.getName() + " from a nether portal.\nTeleported from " + player.getLocation().toString() + " to " + returnLocation.toString(), CustomLogEntryTypes.Debug);
+            return;
+        }
+        PersistentDataContainer container = player.getPersistentDataContainer();
+        if (container.has(DataKeys.PORTAL_TRAP, DataTypes.LOCATION))
+        {
+            GriefPrevention.AddLogEntry("Rescued " + player.getName() + " from a nether portal.\nTeleported from " + player.getLocation() + " to " + returnLocation, CustomLogEntryTypes.Debug);
             player.teleport(returnLocation);
-            player.removeMetadata("GP_PORTALRESCUE", instance);
+            container.remove(DataKeys.PORTAL_TRAP);
         }
         instance.portalReturnTaskMap.remove(player.getUniqueId());
     }

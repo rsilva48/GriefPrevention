@@ -18,6 +18,8 @@
 
 package me.ryanhamshire.GriefPrevention;
 
+import com.griefprevention.util.persistence.DataKeys;
+import com.griefprevention.util.persistence.DataTypes;
 import com.griefprevention.visualization.BoundaryVisualization;
 import com.griefprevention.visualization.VisualizationType;
 import me.ryanhamshire.GriefPrevention.util.BoundingBox;
@@ -65,7 +67,6 @@ import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.world.PortalCreateEvent;
 import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.metadata.MetadataValue;
 import org.bukkit.projectiles.BlockProjectileSource;
 import org.bukkit.projectiles.ProjectileSource;
 
@@ -1103,14 +1104,13 @@ public class BlockEventHandler implements Listener
             return;
         }
 
-        List<MetadataValue> meta = event.getItem().getMetadata("GP_ITEMOWNER");
+        UUID itemOwnerId = event.getItem().getPersistentDataContainer().get(DataKeys.PROTECTED_ITEM, DataTypes.UUID);
         // We only care about an item if it has been flagged as belonging to a player.
-        if (meta.isEmpty())
+        if (itemOwnerId == null)
         {
             return;
         }
 
-        UUID itemOwnerId = (UUID) meta.get(0).value();
         // Determine if the owner has unlocked their dropped items.
         // This first requires that the player is logged in.
         if (Bukkit.getServer().getPlayer(itemOwnerId) != null)

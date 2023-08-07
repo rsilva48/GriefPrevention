@@ -18,6 +18,8 @@
 
 package me.ryanhamshire.GriefPrevention;
 
+import com.griefprevention.util.persistence.DataKeys;
+import com.griefprevention.util.persistence.DataTypes;
 import me.ryanhamshire.GriefPrevention.events.ProtectDeathDropsEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -60,8 +62,6 @@ import org.bukkit.event.hanging.HangingBreakEvent.RemoveCause;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.metadata.FixedMetadataValue;
-import org.bukkit.metadata.MetadataValue;
 import org.bukkit.projectiles.BlockProjectileSource;
 import org.bukkit.projectiles.ProjectileSource;
 import org.jetbrains.annotations.NotNull;
@@ -189,17 +189,16 @@ public class EntityEventHandler implements Listener
             //if changing a block TO air, this is when the falling block formed.  note its original location
             if (event.getTo() == Material.AIR)
             {
-                entity.setMetadata("GP_FALLINGBLOCK", new FixedMetadataValue(GriefPrevention.instance, block.getLocation()));
+                entity.getPersistentDataContainer().set(DataKeys.FALLING_BLOCK, DataTypes.LOCATION, block.getLocation());
             }
             //otherwise, the falling block is forming a block.  compare new location to original source
             else
             {
-                List<MetadataValue> values = entity.getMetadata("GP_FALLINGBLOCK");
+                Location originalLocation = entity.getPersistentDataContainer().get(DataKeys.FALLING_BLOCK, DataTypes.LOCATION);
                 //if we're not sure where this entity came from (maybe another plugin didn't follow the standard?), allow the block to form
                 //Or if entity fell through an end portal, allow it to form, as the event is erroneously fired twice in this scenario.
-                if (values.size() < 1) return;
+                if (originalLocation == null) return;
 
-                Location originalLocation = (Location) (values.get(0).value());
                 Location newLocation = block.getLocation();
 
                 //if did not fall straight down
@@ -329,7 +328,7 @@ public class EntityEventHandler implements Listener
     {
         if (event.getEntityType() != EntityType.FALLING_BLOCK)
             return;
-        event.getEntity().removeMetadata("GP_FALLINGBLOCK", instance);
+        event.getEntity().getPersistentDataContainer().remove(DataKeys.FALLING_BLOCK);
     }
 
     //Don't let people drop in TNT through end portals
@@ -505,7 +504,7 @@ public class EntityEventHandler implements Listener
             }
 
             //otherwise, mark item with protection information
-            newItem.setMetadata("GP_ITEMOWNER", new FixedMetadataValue(GriefPrevention.instance, pendingProtection.owner));
+            newItem.getPersistentDataContainer().set(DataKeys.PROTECTED_ITEM, DataTypes.UUID, pendingProtection.owner);
 
             //and remove pending protection data
             watchList.remove(i);
@@ -612,11 +611,12 @@ public class EntityEventHandler implements Listener
     }
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
-    public void onItemMerge(ItemMergeEvent event)
+    public void onItemMerge(@NotNull ItemMergeEvent event)
     {
-        Item item = event.getEntity();
-        List<MetadataValue> data = item.getMetadata("GP_ITEMOWNER");
-        event.setCancelled(data != null && data.size() > 0);
+        if (event.getEntity().getPersistentDataContainer().has(DataKeys.PROTECTED_ITEM, DataTypes.UUID))
+        {
+            event.setCancelled(true);
+        }
     }
 
     //when an entity picks up an item
@@ -741,11 +741,10 @@ public class EntityEventHandler implements Listener
 
     private void protectLockedDrops(@NotNull EntityPickupItemEvent event, @Nullable Player player)
     {
-        Item item = event.getItem();
-        List<MetadataValue> data = item.getMetadata("GP_ITEMOWNER");
+        UUID ownerID = event.getItem().getPersistentDataContainer().get(DataKeys.PROTECTED_ITEM, DataTypes.UUID);
 
-        // Ignore absent or invalid data.
-        if (data.isEmpty() || !(data.get(0).value() instanceof UUID ownerID)) return;
+        // Ignore absent data.
+        if (ownerID == null) return;
 
         // Get owner from stored UUID.
         OfflinePlayer owner = instance.getServer().getOfflinePlayer(ownerID);
