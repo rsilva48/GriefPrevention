@@ -28,12 +28,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * Feature: Prevent players from being trapped inside a portal,
  * unable to break blocks or open chat to call for help.
  */
+/*
+ * Technical note: The portal trap check uses the Mojang-mapped value Entity#portalCooldown.
+ * In previous versions, this was a single value (which is why only half of it is exposed).
+ * There are now two separate values: the cooldown and the warmup.
+ * A cooldown greater than 0 always means an entity cannot use a portal, and due to players'
+ * relatively short cooldown, it is safe to assume that if their cooldown is not 0, they have
+ * never exited the portal they are in.
+ */
 public class PortalTrap implements Listener
 {
 
     public static final NamespacedKey PORTAL_TRAP = Objects.requireNonNull(NamespacedKey.fromString("griefprevention:portal_trap_entry"));
-    public static final NamespacedKey PORTAL_TRAP_EXIT = Objects.requireNonNull(NamespacedKey.fromString("griefprevention:portal_trap_exit"));
-    private static final int MAX_PORTAL_SIZE = 23;
 
     private final GriefPrevention instance;
 
@@ -87,7 +93,6 @@ public class PortalTrap implements Listener
         Player player = event.getPlayer();
         // Store teleport data in player's data
         player.getPersistentDataContainer().set(PORTAL_TRAP, DataTypes.LOCATION, player.getLocation());
-        player.getPersistentDataContainer().set(PORTAL_TRAP_EXIT, DataTypes.LOCATION, event.getTo());
 
         // Start task to rescue player
         startRescueTask(player);
@@ -128,14 +133,6 @@ public class PortalTrap implements Listener
             }
 
             PersistentDataContainer container = player.getPersistentDataContainer();
-            if (isOutOfOriginalPortal(player))
-            {
-                container.remove(PORTAL_TRAP_EXIT);
-                container.remove(PORTAL_TRAP);
-                portalReturnTaskMap.remove(player.getUniqueId());
-                return;
-            }
-
             Location location = container.get(PORTAL_TRAP, DataTypes.LOCATION);
             if (location != null)
             {
@@ -145,26 +142,6 @@ public class PortalTrap implements Listener
             }
 
             portalReturnTaskMap.remove(player.getUniqueId());
-        }
-
-        private boolean isOutOfOriginalPortal(@NotNull Player player)
-        {
-            Location portalExit = player.getPersistentDataContainer().get(PORTAL_TRAP_EXIT, DataTypes.LOCATION);
-
-            // Portal trap is from an addon or predates portal exit tagging.
-            if (portalExit == null)
-                return false;
-            // If player is no longer in the same world as the portal they emerged from, they are entering a new portal.
-            if (!player.getWorld().equals(portalExit.getWorld()))
-                return true;
-
-            // If player is outside of maximum portal size, they are entering a new portal.
-            Location playerLocation = player.getLocation();
-            if (Math.abs(portalExit.getX() - playerLocation.getX()) >= MAX_PORTAL_SIZE)
-                return true;
-            if (Math.abs(portalExit.getZ() - playerLocation.getZ()) >= MAX_PORTAL_SIZE)
-                return true;
-            return Math.abs(portalExit.getY() - playerLocation.getY()) >= MAX_PORTAL_SIZE;
         }
     }
 
