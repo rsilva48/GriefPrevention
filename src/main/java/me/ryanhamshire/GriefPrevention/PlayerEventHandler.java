@@ -18,8 +18,6 @@
 
 package me.ryanhamshire.GriefPrevention;
 
-import com.griefprevention.util.persistence.DataKeys;
-import com.griefprevention.util.persistence.DataTypes;
 import com.griefprevention.visualization.BoundaryVisualization;
 import com.griefprevention.visualization.VisualizationType;
 import me.ryanhamshire.GriefPrevention.events.ClaimInspectionEvent;
@@ -80,7 +78,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerLoginEvent.Result;
-import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTakeLecternBookEvent;
@@ -90,10 +87,8 @@ import org.bukkit.event.raid.RaidTriggerEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BlockIterator;
 
 import java.net.InetAddress;
@@ -825,32 +820,6 @@ class PlayerEventHandler implements Listener
         //create a thread to load ignore information
         new IgnoreLoaderThread(playerID, playerData.ignoredPlayers).start();
 
-        //is he stuck in a portal frame?
-        Location portalRescueLocation = player.getPersistentDataContainer().get(DataKeys.PORTAL_TRAP, DataTypes.LOCATION);
-        if (portalRescueLocation != null)
-        {
-            //If so, let him know and rescue him in 10 seconds. If he is in fact not trapped, hopefully chunks will have loaded by this time so he can walk out.
-            GriefPrevention.sendMessage(player, TextMode.Info, Messages.NetherPortalTrapDetectionMessage, 20L);
-            new BukkitRunnable()
-            {
-                @Override
-                public void run()
-                {
-                    PersistentDataContainer container = player.getPersistentDataContainer();
-                    if (player.getPortalCooldown() > 0 && portalRescueLocation.equals(container.get(DataKeys.PORTAL_TRAP, DataTypes.LOCATION)))
-                    {
-                        GriefPrevention.AddLogEntry("Rescued " + player.getName() + " from a nether portal.\nTeleported from " + player.getLocation() + " to " + portalRescueLocation, CustomLogEntryTypes.Debug);
-                        player.teleport(portalRescueLocation);
-                        container.remove(DataKeys.PORTAL_TRAP);
-                    }
-                }
-            }.runTaskLater(instance, 200L);
-        }
-        //Otherwise just reset cooldown, just in case they happened to logout again...
-        else
-            player.setPortalCooldown(0);
-
-
         //if we're holding a logout message for this player, don't send that or this event's join message
         if (instance.config_spam_logoutMessageDelaySeconds > 0)
         {
@@ -930,12 +899,6 @@ class PlayerEventHandler implements Listener
         UUID playerID = player.getUniqueId();
         PlayerData playerData = this.dataStore.getPlayerData(playerID);
         boolean isBanned;
-
-        //If player is not trapped in a portal and has a pending rescue task, remove the associated metadata
-        if (player.getPortalCooldown() < 1)
-        {
-            player.getPersistentDataContainer().remove(DataKeys.PORTAL_TRAP);
-        }
 
         if (playerData.wasKicked)
         {
@@ -1064,24 +1027,6 @@ class PlayerEventHandler implements Listener
         {
             GriefPrevention.sendMessage(player, TextMode.Err, Messages.SiegeNoDrop);
             event.setCancelled(true);
-        }
-    }
-
-    //when a player teleports via a portal
-    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
-    void onPlayerPortal(PlayerPortalEvent event)
-    {
-        //if the player isn't going anywhere, take no action
-        if (event.getTo() == null || event.getTo().getWorld() == null) return;
-
-        Player player = event.getPlayer();
-        if (event.getCause() == TeleportCause.NETHER_PORTAL)
-        {
-            //FEATURE: when players get trapped in a nether portal, send them back through to the other side
-            instance.startRescueTask(player, player.getLocation());
-
-            //don't track in worlds where claims are not enabled
-            if (!instance.claimsEnabledForWorld(event.getTo().getWorld())) return;
         }
     }
 
