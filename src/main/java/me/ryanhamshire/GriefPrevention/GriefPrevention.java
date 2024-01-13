@@ -986,6 +986,11 @@ public class GriefPrevention extends JavaPlugin
         }
     }
 
+    public ModuleManager getModuleManager()
+    {
+        return moduleManager;
+    }
+
     private ClaimsMode configStringToClaimsMode(String configSetting)
     {
         if (configSetting.equalsIgnoreCase("Survival"))
