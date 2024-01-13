@@ -6,8 +6,6 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.UnmodifiableView;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -26,9 +24,9 @@ public final class ModuleManager
      */
     public ModuleManager(@NotNull GriefPrevention plugin)
     {
-        Set<Module> modules = new HashSet<>();
-        // TODO modules go here
-        this.modules = Collections.unmodifiableSet(modules);
+        this.modules = Set.of(
+                new WelcomeModule(plugin)
+        );
     }
 
     /**
