@@ -133,7 +133,7 @@ public abstract class Module implements Listener
      *
      * @return the module logger
      */
-    public final @NotNull Logger getLogger()
+    final @NotNull Logger getLogger()
     {
         return logger;
     }
@@ -143,7 +143,7 @@ public abstract class Module implements Listener
      *
      * @param message a {@link Supplier} for debug information
      */
-    public final void debug(Supplier<String> message)
+    final void debug(Supplier<String> message)
     {
         if (getConfig().debug())
         {
