@@ -59,7 +59,7 @@ public class WelcomeModule extends Module
         Player player = event.getPlayer();
 
         // Returning players and admins likely already know the basics.
-        if (player.hasPlayedBefore() || player.hasPermission("griefprevention.adminclaims"))
+        if (player.hasPlayedBefore() || !player.hasPermission("griefprevention.welcome"))
         {
             return;
         }
