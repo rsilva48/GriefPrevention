@@ -155,17 +155,17 @@ public class WelcomeModule extends Module
     public static @NotNull ItemStack getBook()
     {
         ItemFactory factory = Bukkit.getItemFactory();
-        BookMeta meta = (BookMeta) factory.getItemMeta(Material.WRITTEN_BOOK);
+        BookMeta meta = Objects.requireNonNull((BookMeta) factory.getItemMeta(Material.WRITTEN_BOOK));
 
         DataStore datastore = GriefPrevention.instance.dataStore;
         meta.setAuthor(datastore.getMessage(Messages.BookAuthor));
         meta.setTitle(datastore.getMessage(Messages.BookTitle));
 
         StringBuilder page1 = new StringBuilder();
-        String URL = datastore.getMessage(Messages.BookLink, DataStore.SURVIVAL_VIDEO_URL);
+        String url = datastore.getMessage(Messages.BookLink, DataStore.SURVIVAL_VIDEO_URL);
         String intro = datastore.getMessage(Messages.BookIntro);
 
-        page1.append(URL).append("\n\n");
+        page1.append(url).append("\n\n");
         page1.append(intro).append("\n\n");
         String editToolName = GriefPrevention.instance.config_claims_modificationTool.name().replace('_', ' ').toLowerCase();
         String infoToolName = GriefPrevention.instance.config_claims_investigationTool.name().replace('_', ' ').toLowerCase();
@@ -176,9 +176,11 @@ public class WelcomeModule extends Module
             page1.append(datastore.getMessage(Messages.BookDisabledChestClaims));
         }
 
-        String page2 = datastore.getMessage(Messages.BookUsefulCommands) +
-                """
-                \n/trust /untrust /trustlist
+        String page2 = datastore.getMessage(Messages.BookUsefulCommands)
+                + """
+                
+                
+                /trust /untrust /trustlist
                 /claimslist
                 /abandonclaim
                 /claim /extendclaim
