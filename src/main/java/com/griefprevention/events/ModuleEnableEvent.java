@@ -10,9 +10,6 @@ import org.jetbrains.annotations.NotNull;
  */
 public class ModuleEnableEvent extends Event
 {
-
-    // Listenable event requirements
-    private static final HandlerList HANDLERS = new HandlerList();
     private final @NotNull Module module;
 
     /**
@@ -25,11 +22,6 @@ public class ModuleEnableEvent extends Event
         this.module = module;
     }
 
-    public static HandlerList getHandlerList()
-    {
-        return HANDLERS;
-    }
-
     /**
      * Get the {@link Module}.
      *
@@ -38,6 +30,14 @@ public class ModuleEnableEvent extends Event
     public @NotNull Module getModule()
     {
         return module;
+    }
+
+    // Listenable event requirements
+    private static final HandlerList HANDLERS = new HandlerList();
+
+    public static HandlerList getHandlerList()
+    {
+        return HANDLERS;
     }
 
     @Override

@@ -11,23 +11,34 @@ import org.jetbrains.annotations.NotNull;
 public class ModuleDisableEvent extends Event
 {
 
-    // Listenable event requirements
-    private static final HandlerList HANDLERS = new HandlerList();
     private final @NotNull Module module;
 
+    /**
+     * Construct a new {@code ModuleDisableEvent}.
+     *
+     * @param module the module
+     */
     public ModuleDisableEvent(@NotNull Module module)
     {
         this.module = module;
     }
 
-    public static HandlerList getHandlerList()
-    {
-        return HANDLERS;
-    }
-
+    /**
+     * Get the {@link Module}.
+     *
+     * @return the module
+     */
     public @NotNull Module getModule()
     {
         return module;
+    }
+
+    // Listenable event requirements
+    private static final HandlerList HANDLERS = new HandlerList();
+
+    public static HandlerList getHandlerList()
+    {
+        return HANDLERS;
     }
 
     @Override
