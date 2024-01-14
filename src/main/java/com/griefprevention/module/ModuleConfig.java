@@ -17,7 +17,7 @@ public class ModuleConfig
     /**
      * Constructor for a new module configuration.
      */
-    ModuleConfig()
+    protected ModuleConfig()
     {
     }
 
@@ -27,7 +27,7 @@ public class ModuleConfig
      * @param in the user configuration
      * @param out the sanitized configuration
      */
-    void load(@NotNull ConfigurationSection in, @NotNull ConfigurationSection out)
+    protected void load(@NotNull ConfigurationSection in, @NotNull ConfigurationSection out)
     {
         // TODO may want utility for this to reduce config work.
         enabled = in.getBoolean("enabled", true);
