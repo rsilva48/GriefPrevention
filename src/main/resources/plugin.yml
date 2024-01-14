@@ -222,8 +222,6 @@ permissions:
     griefprevention.createclaims:
         description: Grants permission to create claims.
         default: true
-        children:
-            griefprevention.welcome: true
     griefprevention.admin.*:
         description: Grants all administrative functionality.
         children:
@@ -287,8 +285,6 @@ permissions:
     griefprevention.adminclaims:
         description: Grants permission to create administrative claims.
         default: op
-        children:
-            griefprevention.welcome: false
     griefprevention.deleteclaims:
         description: Grants permission to delete other players' claims.
         default: op
@@ -360,7 +356,4 @@ permissions:
         default: op
     griefprevention.premovementchat:
         description: Players with this permission can chat before moving.
-        default: false
-    griefprevention.welcome:
-        description: Players with this permission will receive welcome information.
         default: false
