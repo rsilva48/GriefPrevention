@@ -18,6 +18,7 @@
 
 package me.ryanhamshire.GriefPrevention;
 
+import com.griefprevention.module.Module;
 import com.griefprevention.module.ModuleManager;
 import com.griefprevention.module.WelcomeModule;
 import com.griefprevention.visualization.BoundaryVisualization;
@@ -3272,6 +3273,8 @@ public class GriefPrevention extends JavaPlugin
             PlayerData playerData = this.dataStore.getPlayerData(playerID);
             this.dataStore.savePlayerDataSync(playerID, playerData);
         }
+
+        this.moduleManager.getModules().forEach(Module::disable);
 
         this.dataStore.close();
 

@@ -28,7 +28,7 @@ public abstract class Module implements Listener
      *
      * @param plugin the {@link GriefPrevention} instance
      */
-    Module(@NotNull GriefPrevention plugin)
+    protected Module(@NotNull GriefPrevention plugin)
     {
         this.plugin = plugin;
         this.logger = new ModuleLogger(this);
@@ -61,7 +61,7 @@ public abstract class Module implements Listener
     /**
      * Enable module functionality.
      */
-    void onEnable()
+    protected void onEnable()
     {
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
@@ -85,7 +85,7 @@ public abstract class Module implements Listener
     /**
      * Disable module functionality.
      */
-    void onDisable()
+    protected void onDisable()
     {
         HandlerList.unregisterAll(this);
     }
@@ -95,7 +95,7 @@ public abstract class Module implements Listener
      *
      * @return true if the module is enabled
      */
-    public boolean isEnabled()
+    public final boolean isEnabled()
     {
         return enabled;
     }
@@ -106,7 +106,7 @@ public abstract class Module implements Listener
      * @return the new config instance
      */
     @Contract("-> new")
-    abstract @NotNull ModuleConfig createConfig();
+    protected abstract @NotNull ModuleConfig createConfig();
 
     /**
      * Get the configuration for the module.
@@ -123,7 +123,7 @@ public abstract class Module implements Listener
      *
      * @return the loading instance
      */
-    @NotNull GriefPrevention getPlugin()
+    protected @NotNull GriefPrevention getPlugin()
     {
         return plugin;
     }
@@ -133,7 +133,7 @@ public abstract class Module implements Listener
      *
      * @return the module logger
      */
-    final @NotNull Logger getLogger()
+    protected final @NotNull Logger getLogger()
     {
         return logger;
     }
@@ -143,7 +143,7 @@ public abstract class Module implements Listener
      *
      * @param message a {@link Supplier} for debug information
      */
-    final void debug(Supplier<String> message)
+    protected final void debug(Supplier<String> message)
     {
         if (getConfig().debug())
         {

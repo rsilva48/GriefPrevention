@@ -4,10 +4,10 @@ import me.ryanhamshire.GriefPrevention.GriefPrevention;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.UnmodifiableView;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A container for configurable behaviors for GriefPrevention.
@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 public final class ModuleManager
 {
 
-    private final @NotNull @UnmodifiableView Set<Module> modules;
+    private final @NotNull @Unmodifiable Set<Module> modules;
 
     /**
      * Construct a new {@code ModuleManager} instance.
@@ -37,7 +37,7 @@ public final class ModuleManager
      */
     public void loadConfig(@NotNull Configuration in, @NotNull Configuration out)
     {
-        for (Module module : modules)
+        for (Module module : getModules())
         {
             // Use "modules" section for all modules.
             String path = "modules." + module.getName();
@@ -57,7 +57,7 @@ public final class ModuleManager
      */
     public void updateModules()
     {
-        for (Module module : modules)
+        for (Module module : getModules())
         {
             // Enable or disable modules based on config.
             // Modules track state and will not attempt to enable or disable if already in correct state.
@@ -77,19 +77,19 @@ public final class ModuleManager
      *
      * @return the available modules
      */
-    public @NotNull @UnmodifiableView Set<Module> getModules()
+    public @NotNull @Unmodifiable Set<Module> getModules()
     {
         return modules;
     }
 
     /**
-     * Get an unmodifiable {@link Set} of all enabled modules.
+     * Get a {@link Stream} of all enabled modules.
      *
      * @return the available modules
      */
-    public @NotNull @UnmodifiableView Set<Module> getEnabledModules()
+    public @NotNull Stream<Module> getEnabledModules()
     {
-        return modules.stream().filter(Module::isEnabled).collect(Collectors.toUnmodifiableSet());
+        return getModules().stream().filter(Module::isEnabled);
     }
 
 }
