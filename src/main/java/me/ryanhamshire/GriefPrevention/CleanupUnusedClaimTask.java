@@ -62,7 +62,7 @@ class CleanupUnusedClaimTask implements Runnable
                 if (expireEventCanceled())
                     return;
                 claim.removeSurfaceFluids(null);
-                GriefPrevention.instance.dataStore.deleteClaim(claim, true, true);
+                GriefPrevention.instance.dataStore.deleteClaim(claim);
 
                 //if configured to do so, restore the land to natural
                 if (GriefPrevention.instance.creativeRulesApply(claim.getLesserBoundaryCorner()) || GriefPrevention.instance.config_claims_survivalAutoNatureRestoration)
@@ -123,7 +123,7 @@ class CleanupUnusedClaimTask implements Runnable
                 {
                     if (expireEventCanceled())
                         return;
-                    GriefPrevention.instance.dataStore.deleteClaim(claim, true, true);
+                    GriefPrevention.instance.dataStore.deleteClaim(claim);
                     GriefPrevention.AddLogEntry("Removed " + claim.getOwnerName() + "'s unused claim @ " + GriefPrevention.getfriendlyLocationString(claim.getLesserBoundaryCorner()), CustomLogEntryTypes.AdminActivity);
 
                     //restore the claim area to natural state

@@ -1624,7 +1624,7 @@ public class GriefPrevention extends JavaPlugin
                     else
                     {
                         claim.removeSurfaceFluids(null);
-                        this.dataStore.deleteClaim(claim, true, true);
+                        this.dataStore.deleteClaim(claim);
 
                         //if in a creative mode world, /restorenature the claim
                         if (GriefPrevention.instance.creativeRulesApply(claim.getLesserBoundaryCorner()) || GriefPrevention.instance.config_claims_survivalAutoNatureRestoration)
@@ -1851,15 +1851,15 @@ public class GriefPrevention extends JavaPlugin
         else if (cmd.getName().equalsIgnoreCase("adminclaimslist"))
         {
             //find admin claims
-            Vector<Claim> claims = new Vector<>();
-            for (Claim claim : this.dataStore.claims)
+            List<Claim> claims = new ArrayList<>();
+            for (Claim claim : this.dataStore.getClaims())
             {
-                if (claim.ownerID == null)  //admin claim
+                if (claim.ownerID == null && claim.parent == null)  //admin claim
                 {
                     claims.add(claim);
                 }
             }
-            if (claims.size() > 0)
+            if (!claims.isEmpty())
             {
                 GriefPrevention.sendMessage(player, TextMode.Instr, Messages.ClaimsListHeader);
                 for (Claim claim : claims)
@@ -2400,7 +2400,7 @@ public class GriefPrevention extends JavaPlugin
         {
             //delete it
             claim.removeSurfaceFluids(null);
-            this.dataStore.deleteClaim(claim, true, false);
+            this.dataStore.deleteClaim(claim);
 
             //if in a creative mode world, restore the claim area
             if (GriefPrevention.instance.creativeRulesApply(claim.getLesserBoundaryCorner()))

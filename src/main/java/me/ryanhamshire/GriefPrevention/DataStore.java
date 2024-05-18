@@ -37,6 +37,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.khelekore.prtree.PRTree;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -71,8 +73,10 @@ public abstract class DataStore
     protected ConcurrentHashMap<String, Integer> permissionToBonusBlocksMap = new ConcurrentHashMap<>();
 
     //in-memory cache for claim data
-    ArrayList<Claim> claims = new ArrayList<>();
-    ConcurrentHashMap<Long, ArrayList<Claim>> chunksToClaimsMap = new ConcurrentHashMap<>();
+    private final Object claimLock = new Object();
+    private final Map<Long, Claim> claims = new HashMap<>();
+    private final ClaimToMinRegion claimToRegion = new ClaimToMinRegion();
+    private PRTree<Claim> claimTree = new PRTree<>(claimToRegion, 30);
 
     //in-memory cache for messages
     private String[] messages;
@@ -132,18 +136,22 @@ public abstract class DataStore
     //initialization!
     void initialize() throws Exception
     {
+        rebuildIndex();
+
         GriefPrevention.AddLogEntry(this.claims.size() + " total claims loaded.");
 
-        //RoboMWM: ensure the nextClaimID is greater than any other claim ID. If not, data corruption occurred (out of storage space, usually).
-        for (Claim claim : this.claims)
+        // Ensure the nextClaimID is greater than any other claim ID. If not, data corruption occurred (out of storage space, usually).
+        long highestExisting;
+        synchronized (claimLock)
         {
-            if (claim.id >= nextClaimID)
-            {
-                GriefPrevention.instance.getLogger().severe("nextClaimID was lesser or equal to an already-existing claim ID!\n" +
-                        "This usually happens if you ran out of storage space.");
-                GriefPrevention.AddLogEntry("Changing nextClaimID from " + nextClaimID + " to " + claim.id, CustomLogEntryTypes.Debug, false);
-                nextClaimID = claim.id + 1;
-            }
+            highestExisting = this.claims.keySet().stream().max(Long::compareTo).orElse(-1L);
+        }
+        if (highestExisting >= nextClaimID)
+        {
+            GriefPrevention.instance.getLogger().severe("nextClaimID was lesser or equal to an already-existing claim ID!\n" +
+                    "This usually happens if you ran out of storage space.");
+            GriefPrevention.AddLogEntry("Changing nextClaimID from " + nextClaimID + " to " + highestExisting, CustomLogEntryTypes.Debug, false);
+            nextClaimID = highestExisting + 1;
         }
 
         //ensure data folders exist
@@ -162,13 +170,11 @@ public abstract class DataStore
         {
             GriefPrevention.AddLogEntry("Please wait.  Updating data format.");
 
-            for (Claim claim : this.claims)
+            synchronized (claimLock)
             {
-                this.saveClaim(claim);
-
-                for (Claim subClaim : claim.children)
+                for (Claim claim : this.claims.values())
                 {
-                    this.saveClaim(subClaim);
+                    this.saveClaim(claim);
                 }
             }
 
@@ -428,30 +434,18 @@ public abstract class DataStore
         }
     }
 
-    //adds a claim to the datastore, making it an effective claim
-    synchronized void addClaim(Claim newClaim, boolean writeToStorage)
+    /**
+     * Add a claim to the datastore, making it an effective claim.
+     *
+     * <p>Bulk modifications (i.e. initial claim load on startup) should prevent indexing and call
+     * {@link #rebuildIndex()} when done.</p>
+     *
+     * @param newClaim the claim to add
+     * @param writeToStorage whether to write the claim to secondary storage
+     * @param index whether to perform indexing immediately
+     */
+    protected void addClaim(Claim newClaim, boolean writeToStorage, boolean index)
     {
-        //subdivisions are added under their parent, not directly to the hash map for direct search
-        if (newClaim.parent != null)
-        {
-            if (!newClaim.parent.children.contains(newClaim))
-            {
-                newClaim.parent.children.add(newClaim);
-            }
-            newClaim.inDataStore = true;
-            if (writeToStorage)
-            {
-                this.saveClaim(newClaim);
-            }
-            return;
-        }
-
-        //add it and mark it as added
-        this.claims.add(newClaim);
-        addToChunkClaimMap(newClaim);
-
-        newClaim.inDataStore = true;
-
         //except for administrative claims (which have no owner), update the owner's playerData with the new claim
         if (!newClaim.isAdminClaim() && writeToStorage)
         {
@@ -464,48 +458,100 @@ public abstract class DataStore
         {
             this.saveClaim(newClaim);
         }
-    }
 
-    private void addToChunkClaimMap(Claim claim)
-    {
-        // Subclaims should not be added to chunk claim map.
-        if (claim.parent != null) return;
-
-        ArrayList<Long> chunkHashes = claim.getChunkHashes();
-        for (Long chunkHash : chunkHashes)
+        // Index claim if configured to.
+        if (index)
         {
-            ArrayList<Claim> claimsInChunk = this.chunksToClaimsMap.get(chunkHash);
-            if (claimsInChunk == null)
+            index(newClaim);
+        }
+        else if (newClaim.id != null && newClaim.id != -1)
+        {
+            synchronized (claimLock)
             {
-                this.chunksToClaimsMap.put(chunkHash, claimsInChunk = new ArrayList<>());
+                this.claims.put(newClaim.id, newClaim);
+                newClaim.inDataStore = true;
+                for (Claim child : newClaim.children)
+                {
+                    if (child.id == null) continue;
+                    this.claims.put(child.id, child);
+                    child.inDataStore = true;
+                }
             }
-
-            claimsInChunk.add(claim);
         }
     }
 
-    private void removeFromChunkClaimMap(Claim claim)
+    protected void index(@NotNull Claim claim)
     {
-        ArrayList<Long> chunkHashes = claim.getChunkHashes();
-        for (Long chunkHash : chunkHashes)
+        if (claim.id == null || claim.id == -1L)
         {
-            ArrayList<Claim> claimsInChunk = this.chunksToClaimsMap.get(chunkHash);
-            if (claimsInChunk != null)
+            claim.inDataStore = false;
+            return;
+        }
+
+        index(Collections.singleton(claim));
+    }
+
+    protected void index(@NotNull Collection<Claim> claims)
+    {
+        synchronized (claimLock)
+        {
+            for (Claim claim : claims)
             {
-                for (Iterator<Claim> it = claimsInChunk.iterator(); it.hasNext(); )
+                if (claim.id == null || claim.id == -1L) continue;
+
+                this.claims.put(claim.id, claim);
+                claim.inDataStore = true;
+                for (Claim child : claim.children)
                 {
-                    Claim c = it.next();
-                    if (c.id.equals(claim.id))
-                    {
-                        it.remove();
-                        break;
-                    }
-                }
-                if (claimsInChunk.isEmpty())
-                { // if nothing's left, remove this chunk's cache
-                    this.chunksToClaimsMap.remove(chunkHash);
+                    if (child.id == null || child.id == -1L) continue;
+                    this.claims.put(child.id, child);
+                    child.inDataStore = true;
                 }
             }
+            this.claimTree = new PRTree<>(claimToRegion, ClaimToMinRegion.getBranchFactor(this.claims.size()));
+            this.claimTree.load(this.claims.values());
+        }
+    }
+
+    protected void removeIndex(@NotNull Claim claim)
+    {
+        if (claim.id == null || claim.id == -1L)
+        {
+            claim.inDataStore = false;
+            return;
+        }
+
+        removeIndex(Collections.singleton(claim));
+    }
+
+    protected void removeIndex(@NotNull Collection<Claim> claims)
+    {
+        synchronized (claimLock)
+        {
+            for (Claim claim : claims)
+            {
+                if (claim.id == null) continue;
+
+                this.claims.remove(claim.id);
+                claim.inDataStore = false;
+                for (Claim child : claim.children)
+                {
+                    if (child.id == null) continue;
+                    this.claims.remove(child.id);
+                    child.inDataStore = false;
+                }
+            }
+            this.claimTree = new PRTree<>(claimToRegion, ClaimToMinRegion.getBranchFactor(this.claims.size()));
+            this.claimTree.load(this.claims.values());
+        }
+    }
+
+    protected void rebuildIndex()
+    {
+        synchronized (claimLock)
+        {
+            this.claimTree = new PRTree<>(claimToRegion, ClaimToMinRegion.getBranchFactor(this.claims.size()));
+            this.claimTree.load(this.claims.values());
         }
     }
 
@@ -612,26 +658,26 @@ public abstract class DataStore
     abstract PlayerData getPlayerDataFromStorage(UUID playerID);
 
     //deletes a claim or subdivision
-    synchronized public void deleteClaim(Claim claim)
+    public void deleteClaim(@NotNull Claim claim)
     {
-        this.deleteClaim(claim, true, false);
+        this.deleteClaim(claim, true, true);
     }
 
     /**
      * @deprecated Releasing pets is no longer a core feature. Use {@link #deleteClaim(Claim)}.
      */
     @Deprecated(forRemoval = true, since = "17.0.0")
-    synchronized public void deleteClaim(Claim claim, boolean releasePets)
+    public void deleteClaim(@NotNull Claim claim, boolean releasePets)
     {
-        this.deleteClaim(claim, true, false);
+        this.deleteClaim(claim, true, true);
     }
 
-    synchronized void deleteClaim(Claim claim, boolean fireEvent, boolean ignored)
+    private void deleteClaim(@NotNull Claim claim, boolean fireEvent, boolean removeIndex)
     {
         //delete any children
         for (int j = 1; (j - 1) < claim.children.size(); j++)
         {
-            this.deleteClaim(claim.children.get(j - 1), fireEvent, ignored);
+            this.deleteClaim(claim.children.get(j - 1), fireEvent, false);
         }
 
         //subdivisions must also be removed from the parent claim child list
@@ -645,24 +691,18 @@ public abstract class DataStore
         claim.inDataStore = false;
 
         //remove from memory
-        for (int i = 0; i < this.claims.size(); i++)
+        if (removeIndex)
         {
-            if (claims.get(i).id.equals(claim.id))
-            {
-                this.claims.remove(i);
-                break;
-            }
+            removeIndex(claim);
         }
-
-        removeFromChunkClaimMap(claim);
 
         //remove from secondary storage
         this.deleteClaimFromSecondaryStorage(claim);
 
         //update player data
-        if (claim.ownerID != null)
+        if (claim.parent == null && claim.getOwnerID() != null)
         {
-            PlayerData ownerData = this.getPlayerData(claim.ownerID);
+            PlayerData ownerData = this.getPlayerData(claim.getOwnerID());
             for (int i = 0; i < ownerData.getClaims().size(); i++)
             {
                 if (ownerData.getClaims().get(i).id.equals(claim.id))
@@ -671,7 +711,7 @@ public abstract class DataStore
                     break;
                 }
             }
-            this.savePlayerData(claim.ownerID, ownerData);
+            this.savePlayerData(claim.getOwnerID(), ownerData);
         }
 
         if (fireEvent)
@@ -683,10 +723,18 @@ public abstract class DataStore
 
     abstract void deleteClaimFromSecondaryStorage(Claim claim);
 
-    //gets the claim at a specific location
-    //ignoreHeight = TRUE means that a location UNDER an existing claim will return the claim
-    //cachedClaim can be NULL, but will help performance if you have a reasonable guess about which claim the location is in
-    synchronized public Claim getClaimAt(Location location, boolean ignoreHeight, Claim cachedClaim)
+    /**
+     * Get the claim at a specific location.
+     *
+     * <p>The cached claim may be null, but will increase performance if you have a reasonable idea
+     * of which claim is correct.
+     *
+     * @param location the location
+     * @param ignoreHeight whether to check containment vertically
+     * @param cachedClaim the cached claim, if any
+     * @return the claim containing the location or null if no claim exists there
+     */
+    public @Nullable Claim getClaimAt(@NotNull Location location, boolean ignoreHeight, @Nullable Claim cachedClaim)
     {
         return getClaimAt(location, ignoreHeight, false, cachedClaim);
     }
@@ -698,106 +746,123 @@ public abstract class DataStore
      * of which claim is correct.
      *
      * @param location the location
-     * @param ignoreHeight whether or not to check containment vertically
-     * @param ignoreSubclaims whether or not subclaims should be returned over claims
+     * @param ignoreHeight whether to check containment vertically
+     * @param ignoreSubclaims whether to ignore subclaims, returning only top level claims
      * @param cachedClaim the cached claim, if any
      * @return the claim containing the location or null if no claim exists there
      */
-    synchronized public Claim getClaimAt(Location location, boolean ignoreHeight, boolean ignoreSubclaims, Claim cachedClaim)
+    public @Nullable Claim getClaimAt(@NotNull Location location, boolean ignoreHeight, boolean ignoreSubclaims, @Nullable Claim cachedClaim)
     {
         //check cachedClaim guess first.  if it's in the datastore and the location is inside it, we're done
         if (cachedClaim != null && cachedClaim.inDataStore && cachedClaim.contains(location, ignoreHeight, !ignoreSubclaims))
             return cachedClaim;
 
         //find a top level claim
-        Long chunkID = getChunkHash(location);
-        ArrayList<Claim> claimsInChunk = this.chunksToClaimsMap.get(chunkID);
-        if (claimsInChunk == null) return null;
+        int blockX = location.getBlockX();
+        int blockZ = location.getBlockZ();
 
-        for (Claim claim : claimsInChunk)
+        synchronized (claimLock)
         {
-            if (claim.inDataStore && claim.contains(location, ignoreHeight, false))
+            Claim topLevelClaim = null;
+            for (Claim claim : this.claimTree.find(blockX, blockZ, blockX, blockZ))
             {
-                // If ignoring subclaims, claim is a match.
-                if (ignoreSubclaims) return claim;
+                // If ignoring subclaims, skip them.
+                if (ignoreSubclaims && claim.parent != null) continue;
 
-                //when we find a top level claim, if the location is in one of its subdivisions,
-                //return the SUBDIVISION, not the top level claim
-                for (int j = 0; j < claim.children.size(); j++)
+                if (claim.inDataStore && claim.contains(location, ignoreHeight, false))
                 {
-                    Claim subdivision = claim.children.get(j);
-                    if (subdivision.inDataStore && subdivision.contains(location, ignoreHeight, false))
-                        return subdivision;
-                }
+                    // If ignoring subclaims, the first match is good.
+                    if (ignoreSubclaims) return claim;
 
-                return claim;
+                    // If this is a subclaim...
+                    if (claim.parent != null)
+                    {
+                        // If the parent doesn't actually include this location, ignore.
+                        if (!claim.parent.inDataStore || !claim.parent.contains(location, ignoreHeight, false)) continue;
+                        // Otherwise, the claim is a match.
+                        return claim;
+                    }
+
+                    // Otherwise, this is the parent claim. In case there is a child here, keep searching.
+                    topLevelClaim = claim;
+                }
+            }
+
+            // Return the top level claim if available.
+            return topLevelClaim;
+        }
+    }
+
+    /**
+     * Get a claim by ID.
+     *
+     * @param id the claim ID
+     * @return the claim or null if no claim by that ID is indexed
+     */
+    public @Nullable Claim getClaim(long id)
+    {
+        synchronized (claimLock)
+        {
+            return this.claims.get(id);
+        }
+    }
+
+    /**
+     * Get the number of claims currently loaded.
+     *
+     * @return the loaded claim count
+     */
+    public int getClaimCount()
+    {
+        synchronized (claimLock)
+        {
+            return this.claims.size();
+        }
+    }
+
+    /**
+     * Returns all loaded land claims. This is a mutable copy. Changes made to it are not reflected in memory.
+     * To modify the datastore's claims, use {@link #deleteClaim(Claim)} or
+     * {@link #createClaim(World, int, int, int, int, int, int, UUID, Claim, Long, Player)}.
+     *
+     * @return a collection of loaded claims
+     */
+    public @NotNull Collection<Claim> getClaims()
+    {
+        synchronized (claimLock)
+        {
+            return new HashSet<>(this.claims.values());
+        }
+    }
+
+    public @NotNull Collection<Claim> getClaims(int chunkx, int chunkz)
+    {
+        Collection<Claim> claims = new HashSet<>();
+        int blockX = chunkx << 4;
+        int blockZ = chunkz << 4;
+
+        synchronized (claimLock)
+        {
+            for (Claim claim : this.claimTree.find(blockX, blockZ, blockX + 15, blockZ + 15))
+            {
+                claims.add(claim);
             }
         }
 
-        //if no claim found, return null
-        return null;
-    }
-
-    //finds a claim by ID
-    public synchronized Claim getClaim(long id)
-    {
-        for (Claim claim : this.claims)
-        {
-            if (claim.inDataStore)
-            {
-                if (claim.getID() == id)
-                    return claim;
-                for (Claim subClaim : claim.children)
-                {
-                    if (subClaim.getID() == id)
-                    return subClaim;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    //returns a read-only access point for the list of all land claims
-    //if you need to make changes, use provided methods like .deleteClaim() and .createClaim().
-    //this will ensure primary memory (RAM) and secondary memory (disk, database) stay in sync
-    public Collection<Claim> getClaims()
-    {
-        return Collections.unmodifiableCollection(this.claims);
-    }
-
-    public Collection<Claim> getClaims(int chunkx, int chunkz)
-    {
-        ArrayList<Claim> chunkClaims = this.chunksToClaimsMap.get(getChunkHash(chunkx, chunkz));
-        if (chunkClaims != null)
-        {
-            return Collections.unmodifiableCollection(chunkClaims);
-        }
-        else
-        {
-            return Collections.unmodifiableCollection(new ArrayList<>());
-        }
+        return claims;
     }
 
     public @NotNull Set<Claim> getChunkClaims(@NotNull World world, @NotNull BoundingBox boundingBox)
     {
         Set<Claim> claims = new HashSet<>();
-        int chunkXMax = boundingBox.getMaxX() >> 4;
-        int chunkZMax = boundingBox.getMaxZ() >> 4;
 
-        for (int chunkX = boundingBox.getMinX() >> 4; chunkX <= chunkXMax; ++chunkX)
+        synchronized (claimLock)
         {
-            for (int chunkZ = boundingBox.getMinZ() >> 4; chunkZ <= chunkZMax; ++chunkZ)
+            for (Claim claim : this.claimTree.find(boundingBox.getMinX(), boundingBox.getMinZ(), boundingBox.getMaxX(), boundingBox.getMaxZ()))
             {
-                ArrayList<Claim> chunkClaims = this.chunksToClaimsMap.get(getChunkHash(chunkX, chunkZ));
-                if (chunkClaims == null) continue;
-
-                for (Claim claim : chunkClaims)
+                if (claim.inDataStore && world.equals(claim.getLesserBoundaryCorner().getWorld()))
                 {
-                    if (claim.inDataStore && world.equals(claim.getLesserBoundaryCorner().getWorld()))
-                    {
-                        claims.add(claim);
-                    }
+                    claims.add(claim);
                 }
             }
         }
@@ -805,22 +870,36 @@ public abstract class DataStore
         return claims;
     }
 
-    //gets an almost-unique, persistent identifier for a chunk
+    /**
+     * @deprecated chunk hashes are no longer used by GP.
+     */
+    @Deprecated(forRemoval = true, since = "17.0.0")
     public static Long getChunkHash(long chunkx, long chunkz)
     {
         return (chunkz ^ (chunkx << 32));
     }
 
-    //gets an almost-unique, persistent identifier for a chunk
+    /**
+     * @deprecated chunk hashes are no longer used by GP.
+     */
+    @Deprecated(forRemoval = true, since = "17.0.0")
     public static Long getChunkHash(Location location)
     {
         return getChunkHash(location.getBlockX() >> 4, location.getBlockZ() >> 4);
     }
 
+    /**
+     * @deprecated chunk hashes are no longer used by GP.
+     */
+    @Deprecated(forRemoval = true, since = "17.0.0")
     public static ArrayList<Long> getChunkHashes(Claim claim) {
         return getChunkHashes(claim.getLesserBoundaryCorner(), claim.getGreaterBoundaryCorner());
     }
 
+    /**
+     * @deprecated chunk hashes are no longer used by GP.
+     */
+    @Deprecated(forRemoval = true, since = "17.0.0")
     public static ArrayList<Long> getChunkHashes(Location min, Location max) {
         ArrayList<Long> hashes = new ArrayList<>();
         int smallX = min.getBlockX() >> 4;
@@ -842,7 +921,7 @@ public abstract class DataStore
     /*
      * Creates a claim and flags it as being new....throwing a create claim event;
      */
-    synchronized public CreateClaimResult createClaim(World world, int x1, int x2, int y1, int y2, int z1, int z2, UUID ownerID, Claim parent, Long id, Player creatingPlayer)
+    public @NotNull CreateClaimResult createClaim(@NotNull World world, int x1, int x2, int y1, int y2, int z1, int z2, @Nullable UUID ownerID, @Nullable Claim parent, @Nullable Long id, @Nullable Player creatingPlayer)
     {
         return createClaim(world, x1, x2, y1, y2, z1, z2, ownerID, parent, id, creatingPlayer, false);
     }
@@ -858,7 +937,7 @@ public abstract class DataStore
     //does NOT check a player has permission to create a claim, or enough claim blocks.
     //does NOT check minimum claim size constraints
     //does NOT visualize the new claim for any players
-    synchronized public CreateClaimResult createClaim(World world, int x1, int x2, int y1, int y2, int z1, int z2, UUID ownerID, Claim parent, Long id, Player creatingPlayer, boolean dryRun)
+    public @NotNull CreateClaimResult createClaim(@NotNull World world, int x1, int x2, int y1, int y2, int z1, int z2, @Nullable UUID ownerID, @Nullable Claim parent, @Nullable Long id, @Nullable Player creatingPlayer, boolean dryRun)
     {
         CreateClaimResult result = new CreateClaimResult();
 
@@ -902,6 +981,12 @@ public abstract class DataStore
             bigz = z1;
         }
 
+        //creative mode claims always go to bedrock
+        if (GriefPrevention.instance.config_claims_worldModes.get(world) == ClaimsMode.Creative)
+        {
+            smally = world.getMinHeight();
+        }
+
         if (parent != null)
         {
             Location lesser = parent.getLesserBoundaryCorner();
@@ -923,12 +1008,6 @@ public abstract class DataStore
             return result;
         }
 
-        //creative mode claims always go to bedrock
-        if (GriefPrevention.instance.config_claims_worldModes.get(world) == ClaimsMode.Creative)
-        {
-            smally = world.getMinHeight();
-        }
-
         //create a new claim instance (but don't save it, yet)
         Claim newClaim = new Claim(
                 smallerBoundaryCorner,
@@ -943,25 +1022,32 @@ public abstract class DataStore
         newClaim.parent = parent;
 
         //ensure this new claim won't overlap any existing claims
-        ArrayList<Claim> claimsToCheck;
-        if (newClaim.parent != null)
+        synchronized (claimLock)
         {
-            claimsToCheck = newClaim.parent.children;
-        }
-        else
-        {
-            claimsToCheck = this.claims;
-        }
-
-        for (Claim otherClaim : claimsToCheck)
-        {
-            //if we find an existing claim which will be overlapped
-            if (otherClaim.id != newClaim.id && otherClaim.inDataStore && otherClaim.overlaps(newClaim))
+            Iterable<Claim> claimsToCheck;
+            // If this is a child, check against its siblings.
+            if (newClaim.parent != null)
             {
-                //result = fail, return conflicting claim
-                result.succeeded = false;
-                result.claim = otherClaim;
-                return result;
+                claimsToCheck = newClaim.parent.children;
+            }
+            // Otherwise, check against all other claims - we'll ignore children later.
+            else
+            {
+                claimsToCheck = this.claimTree.find(smallx, smallz, bigx, bigz);
+            }
+
+            for (Claim otherClaim : claimsToCheck)
+            {
+                // If we're checking top level claims, ignore subclaims.
+                if (newClaim.parent == null && otherClaim.parent != null) continue;
+                //if we find an existing claim which will be overlapped
+                if (otherClaim.id != newClaim.id && otherClaim.inDataStore && otherClaim.overlaps(newClaim))
+                {
+                    //result = fail, return conflicting claim
+                    result.succeeded = false;
+                    result.claim = otherClaim;
+                    return result;
+                }
             }
         }
 
@@ -983,7 +1069,7 @@ public abstract class DataStore
 
         }
         //otherwise add this new claim to the data store to make it effective
-        this.addClaim(newClaim, true);
+        this.addClaim(newClaim, true, true);
 
         //then return success along with reference to new claim
         result.succeeded = true;
@@ -1112,14 +1198,27 @@ public abstract class DataStore
     }
 
     //deletes all claims owned by a player
-    synchronized public void deleteClaimsForPlayer(UUID playerID, boolean releasePets)
+    public void deleteClaimsForPlayer(UUID playerID, boolean releasePets)
     {
         //make a list of the player's claims
         ArrayList<Claim> claimsToDelete = new ArrayList<>();
-        for (Claim claim : this.claims)
+        synchronized (claimLock)
         {
-            if ((playerID == claim.ownerID || (playerID != null && playerID.equals(claim.ownerID))))
-                claimsToDelete.add(claim);
+            // Remove the claims from the claims list.
+            Iterator<Claim> iterator = this.claims.values().iterator();
+            while (iterator.hasNext())
+            {
+                Claim claim = iterator.next();
+                if (Objects.equals(playerID, claim.getOwnerID()))
+                {
+                    claimsToDelete.add(claim);
+                    iterator.remove();
+                }
+            }
+
+            // Rebuild index.
+            this.claimTree = new PRTree<>(claimToRegion, ClaimToMinRegion.getBranchFactor(this.claims.size()));
+            this.claimTree.load(this.claims.values());
         }
 
         //delete them one by one
@@ -1127,7 +1226,8 @@ public abstract class DataStore
         {
             claim.removeSurfaceFluids(null);
 
-            this.deleteClaim(claim);
+            // TODO: delete without map update
+            this.deleteClaim(claim, true, false);
 
             //if in a creative mode world, delete the claim
             if (GriefPrevention.instance.creativeRulesApply(claim.getLesserBoundaryCorner()))
@@ -1139,7 +1239,7 @@ public abstract class DataStore
 
     //tries to resize a claim
     //see CreateClaim() for details on return value
-    synchronized public CreateClaimResult resizeClaim(Claim claim, int newx1, int newx2, int newy1, int newy2, int newz1, int newz2, Player resizingPlayer)
+    public @NotNull CreateClaimResult resizeClaim(@NotNull Claim claim, int newx1, int newx2, int newy1, int newy2, int newz1, int newz2, @Nullable Player resizingPlayer)
     {
         //try to create this new claim, ignoring the original when checking for overlap
         CreateClaimResult result = this.createClaim(claim.getLesserBoundaryCorner().getWorld(), newx1, newx2, newy1, newy2, newz1, newz2, claim.ownerID, claim.parent, claim.id, resizingPlayer, true);
@@ -1147,7 +1247,6 @@ public abstract class DataStore
         //if succeeded
         if (result.succeeded)
         {
-            removeFromChunkClaimMap(claim); // remove the old boundary from the chunk cache
             // copy the boundary from the claim created in the dry run of createClaim() to our existing claim
             claim.lesserBoundaryCorner = result.claim.lesserBoundaryCorner;
             claim.greaterBoundaryCorner = result.claim.greaterBoundaryCorner;
@@ -1155,7 +1254,8 @@ public abstract class DataStore
             // Also saves affected claims.
             setNewDepth(claim, claim.getLesserBoundaryCorner().getBlockY());
             result.claim = claim;
-            addToChunkClaimMap(claim); // add the new boundary to the chunk cache
+            // Recreate the index to account for the new boundaries.
+            rebuildIndex();
         }
 
         return result;
@@ -1612,7 +1712,7 @@ public abstract class DataStore
     }
 
     private void addDefault(HashMap<String, CustomizableMessage> defaults,
-                            Messages id, String text, String notes)
+                            Messages id, String text, @Nullable String notes)
     {
         CustomizableMessage message = new CustomizableMessage(id, text, notes);
         defaults.put(id.name(), message);
@@ -1701,15 +1801,28 @@ public abstract class DataStore
     //deletes all the land claims in a specified world
     void deleteClaimsInWorld(World world, boolean deleteAdminClaims)
     {
-        for (int i = 0; i < claims.size(); i++)
+        synchronized (claimLock)
         {
-            Claim claim = claims.get(i);
-            if (claim.getLesserBoundaryCorner().getWorld().equals(world))
+            Iterator<Claim> iterator = this.claims.values().iterator();
+            while (iterator.hasNext())
             {
+                Claim claim = iterator.next();
+                // If not deleting admin claims, skip them.
                 if (!deleteAdminClaims && claim.isAdminClaim()) continue;
-                this.deleteClaim(claim, false, false);
-                i--;
+
+                if (world.equals(claim.getLesserBoundaryCorner().getWorld()))
+                {
+                    // Do main delete procedure. This flags the claim as not being in the datastore.
+                    this.deleteClaim(claim, false, false);
+                }
+
+                // Remove all claims that aren't in the datastore.
+                if (!claim.inDataStore) iterator.remove();
             }
+
+            // Rebuild index.
+            this.claimTree = new PRTree<>(claimToRegion, ClaimToMinRegion.getBranchFactor(this.claims.size()));
+            this.claimTree.load(this.claims.values());
         }
     }
 }
