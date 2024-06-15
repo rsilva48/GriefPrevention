@@ -480,6 +480,11 @@ public abstract class DataStore
         }
     }
 
+    /**
+     * Index a claim and its children.
+     *
+     * @param claim the claim to index
+     */
     protected void index(@NotNull Claim claim)
     {
         if (claim.id == null || claim.id == -1L)
@@ -491,6 +496,11 @@ public abstract class DataStore
         index(Collections.singleton(claim));
     }
 
+    /**
+     * Index a {@link Collection} of claims and their children.
+     *
+     * @param claims the claims to index
+     */
     protected void index(@NotNull Collection<Claim> claims)
     {
         synchronized (claimLock)
@@ -513,6 +523,11 @@ public abstract class DataStore
         }
     }
 
+    /**
+     * Remove a claim and its children from the claim index.
+     *
+     * @param claim the claim to remove from the index
+     */
     protected void removeIndex(@NotNull Claim claim)
     {
         if (claim.id == null || claim.id == -1L)
@@ -524,6 +539,11 @@ public abstract class DataStore
         removeIndex(Collections.singleton(claim));
     }
 
+    /**
+     * Remove a {@link Collection} of claims from the claim index.
+     *
+     * @param claims the claims to remove from the index
+     */
     protected void removeIndex(@NotNull Collection<Claim> claims)
     {
         synchronized (claimLock)
@@ -546,6 +566,9 @@ public abstract class DataStore
         }
     }
 
+    /**
+     * Rebuild the claim index.
+     */
     protected void rebuildIndex()
     {
         synchronized (claimLock)
@@ -657,7 +680,11 @@ public abstract class DataStore
 
     abstract PlayerData getPlayerDataFromStorage(UUID playerID);
 
-    //deletes a claim or subdivision
+    /**
+     * Delete a claim.
+     *
+     * @param claim the claim to delete
+     */
     public void deleteClaim(@NotNull Claim claim)
     {
         this.deleteClaim(claim, true, true);
@@ -821,9 +848,11 @@ public abstract class DataStore
     }
 
     /**
-     * Returns all loaded land claims. This is a mutable copy. Changes made to it are not reflected in memory.
-     * To modify the datastore's claims, use {@link #deleteClaim(Claim)} or
-     * {@link #createClaim(World, int, int, int, int, int, int, UUID, Claim, Long, Player)}.
+     * Get all loaded land claims.
+     *
+     * <p>This is a mutable copy. Changes made to it are not reflected in memory. To modify the datastore's claims,
+     * use {@link #deleteClaim(Claim)} or
+     * {@link #createClaim(World, int, int, int, int, int, int, UUID, Claim, Long, Player)}.</p>
      *
      * @return a collection of loaded claims
      */
@@ -918,25 +947,59 @@ public abstract class DataStore
         return hashes;
     }
 
-    /*
-     * Creates a claim and flags it as being new....throwing a create claim event;
+    /**
+     * Attempt to create a claim and add it to the datastore.
+     *
+     * <p>If the new claim would overlap an existing claim, returns a failure along with a reference to the existing
+     * claim. If the {@link ClaimCreatedEvent} is cancelled, returns a failure with a {@code null} claim. Otherwise,
+     * returns a success containing a reference to the new claim.</p>
+     *
+     * <p>This method only checks for conflicts! It does not check permissions or any other restrictions like claim
+     * block totals. While creating claims in disabled worlds is not prevented, they will not function correctly.</p>
+     *
+     * @param world the {@link World} that the claim is in
+     * @param x1 the first x coordinate
+     * @param x2 the second x coordinate
+     * @param y1 the first y coordinate
+     * @param y2 the second y coordinate
+     * @param z1 the first z coordinate
+     * @param z2 the second z coordinate
+     * @param ownerID the {@link UUID} of the claim owner. A {@code null} owner indicates an administrative claim
+     * @param parent the parent claim. A {@code null} parent indicates a top level claim
+     * @param id the ID of the claim. Use {@code null} to indicate that the datastore should assign the next available ID
+     * @param creatingPlayer the creating {@link Player}, if available
+     * @return the result of claim creation
+     * @see #createClaim(World, int, int, int, int, int, int, UUID, Claim, Long, Player, boolean)
      */
     public @NotNull CreateClaimResult createClaim(@NotNull World world, int x1, int x2, int y1, int y2, int z1, int z2, @Nullable UUID ownerID, @Nullable Claim parent, @Nullable Long id, @Nullable Player creatingPlayer)
     {
         return createClaim(world, x1, x2, y1, y2, z1, z2, ownerID, parent, id, creatingPlayer, false);
     }
 
-    //creates a claim.
-    //if the new claim would overlap an existing claim, returns a failure along with a reference to the existing claim
-    //if the new claim would overlap a WorldGuard region where the player doesn't have permission to build, returns a failure with NULL for claim
-    //otherwise, returns a success along with a reference to the new claim
-    //use ownerName == "" for administrative claims
-    //for top level claims, pass parent == NULL
-    //DOES adjust claim blocks available on success (players can go into negative quantity available)
-    //DOES check for world guard regions where the player doesn't have permission
-    //does NOT check a player has permission to create a claim, or enough claim blocks.
-    //does NOT check minimum claim size constraints
-    //does NOT visualize the new claim for any players
+    /**
+     * Attempt to create a claim, optionally adding it to the datastore.
+     *
+     * <p>If the new claim would overlap an existing claim, returns a failure along with a reference to the existing
+     * claim. If the {@link ClaimCreatedEvent} is cancelled, returns a failure with a {@code null} claim. Otherwise,
+     * returns a success containing a reference to the new claim.</p>
+     *
+     * <p>This method only checks for conflicts! It does not check permissions or any other restrictions like claim
+     * block totals. While creating claims in disabled worlds is not prevented, they will not function correctly.</p>
+     *
+     * @param world the {@link World} that the claim is in
+     * @param x1 the first x coordinate
+     * @param x2 the second x coordinate
+     * @param y1 the first y coordinate
+     * @param y2 the second y coordinate
+     * @param z1 the first z coordinate
+     * @param z2 the second z coordinate
+     * @param ownerID the {@link UUID} of the claim owner. A {@code null} owner indicates an administrative claim
+     * @param parent the parent claim. A {@code null} parent indicates a top level claim
+     * @param id the ID of the claim. Use {@code null} to indicate that the datastore should assign the next available ID
+     * @param creatingPlayer the creating {@link Player}, if available
+     * @param dryRun whether to add the newly-created claim (if any) to the datastore and assign an ID
+     * @return the result of claim creation
+     */
     public @NotNull CreateClaimResult createClaim(@NotNull World world, int x1, int x2, int y1, int y2, int z1, int z2, @Nullable UUID ownerID, @Nullable Claim parent, @Nullable Long id, @Nullable Player creatingPlayer, boolean dryRun)
     {
         CreateClaimResult result = new CreateClaimResult();
