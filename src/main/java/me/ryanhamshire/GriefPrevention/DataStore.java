@@ -864,6 +864,10 @@ public abstract class DataStore
         }
     }
 
+    /**
+     * @deprecated use {@link #getChunkClaims(World, int, int)}
+     */
+    @Deprecated(forRemoval = true, since = "17.0.0")
     public @NotNull Collection<Claim> getClaims(int chunkx, int chunkz)
     {
         Collection<Claim> claims = new HashSet<>();
@@ -874,20 +878,75 @@ public abstract class DataStore
         {
             for (Claim claim : this.claimTree.find(blockX, blockZ, blockX + 15, blockZ + 15))
             {
-                claims.add(claim);
+                if (claim.inDataStore)
+                {
+                    claims.add(claim);
+                }
             }
         }
 
         return claims;
     }
 
+    /**
+     * @deprecated calls {@link #getClaims(World, BoundingBox)}; construct bounding box to encompass area required.
+     */
+    @Deprecated(forRemoval = true, since = "17.0.0")
     public @NotNull Set<Claim> getChunkClaims(@NotNull World world, @NotNull BoundingBox boundingBox)
+    {
+        return getClaims(world, boundingBox);
+    }
+
+    /**
+     * Get land claims intersecting a bounding box.
+     *
+     * <p>This is a mutable copy. Changes made to it are not reflected in memory. To modify the datastore's claims,
+     * use {@link #deleteClaim(Claim)} or
+     * {@link #createClaim(World, int, int, int, int, int, int, UUID, Claim, Long, Player)}.</p>
+     *
+     * @param world the world the claims must be in
+     * @param boundingBox the bounding box to check for intersection with
+     * @return the land claims intersecting the bounding box
+     */
+    public @NotNull Set<Claim> getClaims(@NotNull World world, @NotNull BoundingBox boundingBox)
     {
         Set<Claim> claims = new HashSet<>();
 
         synchronized (claimLock)
         {
             for (Claim claim : this.claimTree.find(boundingBox.getMinX(), boundingBox.getMinZ(), boundingBox.getMaxX(), boundingBox.getMaxZ()))
+            {
+                if (claim.inDataStore && world.equals(claim.getLesserBoundaryCorner().getWorld()))
+                {
+                    claims.add(claim);
+                }
+            }
+        }
+
+        return claims;
+    }
+
+    /**
+     * Get land claims in a chunk.
+     *
+     * <p>This is a mutable copy. Changes made to it are not reflected in memory. To modify the datastore's claims,
+     * use {@link #deleteClaim(Claim)} or
+     * {@link #createClaim(World, int, int, int, int, int, int, UUID, Claim, Long, Player)}.</p>
+     *
+     * @param world the world the claims must be in
+     * @param chunkX the chunk x coordinate
+     * @param chunkZ the chunk z coordinate
+     * @return the land claims in the chunk
+     */
+    public @NotNull Collection<Claim> getChunkClaims(@NotNull World world, int chunkX, int chunkZ)
+    {
+        Collection<Claim> claims = new HashSet<>();
+        int blockX = chunkX << 4;
+        int blockZ = chunkZ << 4;
+
+        synchronized (claimLock)
+        {
+            for (Claim claim : this.claimTree.find(blockX, blockZ, blockX + 15, blockZ + 15))
             {
                 if (claim.inDataStore && world.equals(claim.getLesserBoundaryCorner().getWorld()))
                 {
@@ -1260,9 +1319,12 @@ public abstract class DataStore
         });
     }
 
-    //deletes all claims owned by a player
-    public void deleteClaimsForPlayer(UUID playerID, boolean releasePets)
-    {
+    /**
+     * Delete all claims owned by a player.
+     *
+     * @param playerID the player whose claims are to be deleted
+     */
+    public void deleteClaimsForPlayer(@Nullable UUID playerID) {
         //make a list of the player's claims
         ArrayList<Claim> claimsToDelete = new ArrayList<>();
         synchronized (claimLock)
@@ -1289,7 +1351,6 @@ public abstract class DataStore
         {
             claim.removeSurfaceFluids(null);
 
-            // TODO: delete without map update
             this.deleteClaim(claim, true, false);
 
             //if in a creative mode world, delete the claim
@@ -1298,6 +1359,15 @@ public abstract class DataStore
                 GriefPrevention.instance.restoreClaim(claim, 0);
             }
         }
+    }
+
+    /**
+     * @deprecated Releasing pets is no longer a core feature. Use {@link #deleteClaimsForPlayer(UUID)}.
+     */
+    @Deprecated(forRemoval = true, since = "17.0.0")
+    public void deleteClaimsForPlayer(UUID playerID, boolean releasePets)
+    {
+        deleteClaimsForPlayer(playerID);
     }
 
     //tries to resize a claim
@@ -1853,16 +1923,13 @@ public abstract class DataStore
         }
     }
 
-    //gets all the claims "near" a location
-    Set<Claim> getNearbyClaims(Location location)
-    {
-        return getChunkClaims(
-                location.getWorld(),
-                new BoundingBox(location.subtract(150, 0, 150), location.clone().add(300, 0, 300)));
-    }
-
-    //deletes all the land claims in a specified world
-    void deleteClaimsInWorld(World world, boolean deleteAdminClaims)
+    /**
+     * Delete all land claims in the specified world.
+     *
+     * @param world the world to delete claims in.
+     * @param deleteAdminClaims whether to delete administrative claims
+     */
+    void deleteClaimsInWorld(@NotNull World world, boolean deleteAdminClaims)
     {
         synchronized (claimLock)
         {

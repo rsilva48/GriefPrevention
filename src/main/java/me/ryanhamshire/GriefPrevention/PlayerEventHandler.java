@@ -1797,7 +1797,13 @@ class PlayerEventHandler implements Listener
                 if (player.isSneaking() && player.hasPermission("griefprevention.visualizenearbyclaims"))
                 {
                     //find nearby claims
-                    Set<Claim> claims = this.dataStore.getNearbyClaims(player.getLocation());
+                    Location nearbyMin = player.getLocation().subtract(150, 0, 150);
+                    nearbyMin.setX(((int) (nearbyMin.getX() / 16)) * 16);
+                    nearbyMin.setZ(((int) (nearbyMin.getZ() / 16)) * 16);
+                    Location nearbyMax = player.getLocation().add(150, 0, 150);
+                    nearbyMax.setX(Math.ceil(nearbyMax.getX() / 16) * 16);
+                    nearbyMax.setZ(Math.ceil(nearbyMax.getZ() / 16) * 16);
+                    Set<Claim> claims = this.dataStore.getClaims(player.getWorld(), new BoundingBox(nearbyMin, nearbyMax));
 
                     // alert plugins of a claim inspection, return if cancelled
                     ClaimInspectionEvent inspectionEvent = new ClaimInspectionEvent(player, null, claims, true);

@@ -1113,7 +1113,7 @@ public class GriefPrevention extends JavaPlugin
 
 
             //delete them
-            this.dataStore.deleteClaimsForPlayer(player.getUniqueId(), false);
+            this.dataStore.deleteClaimsForPlayer(player.getUniqueId());
 
             //inform the player
             int remainingBlocks = playerData.getRemainingClaimBlocks();
@@ -1697,7 +1697,7 @@ public class GriefPrevention extends JavaPlugin
             }
 
             //delete all that player's claims
-            this.dataStore.deleteClaimsForPlayer(otherPlayer.getUniqueId(), true);
+            this.dataStore.deleteClaimsForPlayer(otherPlayer.getUniqueId());
 
             GriefPrevention.sendMessage(player, TextMode.Success, Messages.DeleteAllSuccess, otherPlayer.getName());
             if (player != null)
@@ -1909,7 +1909,7 @@ public class GriefPrevention extends JavaPlugin
             }
 
             //delete all admin claims
-            this.dataStore.deleteClaimsForPlayer(null, true);  //null for owner id indicates an administrative claim
+            this.dataStore.deleteClaimsForPlayer(null);  //null for owner id indicates an administrative claim
 
             GriefPrevention.sendMessage(player, TextMode.Success, Messages.AllAdminDeleted);
             if (player != null)

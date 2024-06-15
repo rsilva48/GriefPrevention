@@ -88,7 +88,7 @@ class CleanupUnusedClaimTask implements Runnable
                 Vector<Claim> claims = new Vector<>(ownerData.getClaims());
 
                 //delete them
-                GriefPrevention.instance.dataStore.deleteClaimsForPlayer(claim.ownerID, true);
+                GriefPrevention.instance.dataStore.deleteClaimsForPlayer(claim.ownerID);
                 GriefPrevention.AddLogEntry(" All of " + claim.getOwnerName() + "'s claims have expired.", CustomLogEntryTypes.AdminActivity);
                 GriefPrevention.AddLogEntry("earliestPermissibleLastLogin#getTime: " + earliestPermissibleLastLogin.getTime(), CustomLogEntryTypes.Debug, true);
                 GriefPrevention.AddLogEntry("ownerInfo#getLastPlayed: " + ownerInfo.getLastPlayed(), CustomLogEntryTypes.Debug, true);
