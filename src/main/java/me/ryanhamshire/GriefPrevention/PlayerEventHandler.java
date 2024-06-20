@@ -88,6 +88,7 @@ import org.bukkit.event.raid.RaidTriggerEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.profile.PlayerProfile;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BlockIterator;
 import org.jetbrains.annotations.NotNull;
@@ -687,7 +688,8 @@ class PlayerEventHandler implements Listener
                             if (info2.address.toString().equals(address))
                             {
                                 OfflinePlayer bannedAccount = instance.getServer().getOfflinePlayer(info2.bannedAccountName);
-                                instance.getServer().getBanList(BanList.Type.NAME).pardon(bannedAccount.getName());
+                                BanList<PlayerProfile> banList = instance.getServer().getBanList(BanList.Type.PROFILE);
+                                banList.pardon(bannedAccount.getPlayerProfile());
                                 this.tempBannedIps.remove(j--);
                             }
                         }
