@@ -58,8 +58,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
@@ -2653,10 +2651,8 @@ class PlayerEventHandler implements Listener
         {
             result = iterator.next();
             Material type = result.getType();
-            if (type != Material.AIR &&
-                    (!passThroughWater || type != Material.WATER) &&
-                    type != Material.GRASS &&
-                    type != Material.SNOW) return result;
+            if ((!passThroughWater || type != Material.WATER) &&
+                    !Tag.REPLACEABLE.isTagged(type)) return result;
         }
 
         return result;

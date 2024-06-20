@@ -3496,7 +3496,17 @@ public class GriefPrevention extends JavaPlugin
             playerData.lastClaim = claim;
             Block block = location.getBlock();
 
-            Supplier<String> supplier = claim.checkPermission(player, ClaimPermission.Build, new BlockPlaceEvent(block, block.getState(), block, new ItemStack(material), player, true, EquipmentSlot.HAND));
+            var type = material.asItemType();
+            ItemStack itemStack;
+            if (type != null) {
+                // Some materials are block-only and have a separate item material, i.e. WALL_SIGN variants.
+                // The only API-based conversion from block to item material available is the experimental ItemType.
+                itemStack = type.createItemStack();
+            } else {
+                itemStack = new ItemStack(Material.DIRT);
+            }
+
+            Supplier<String> supplier = claim.checkPermission(player, ClaimPermission.Build, new BlockPlaceEvent(block, block.getState(), block, itemStack, player, true, EquipmentSlot.HAND));
 
             if (supplier == null) return null;
 
