@@ -53,6 +53,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.profile.PlayerProfile;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -2998,7 +2999,19 @@ public class GriefPrevention extends JavaPlugin
             playerData.lastClaim = claim;
             Block block = location.getBlock();
 
-            Supplier<String> supplier = claim.checkPermission(player, ClaimPermission.Build, new BlockPlaceEvent(block, block.getState(), block, new ItemStack(material), player, true, EquipmentSlot.HAND));
+            ItemStack itemStack;
+            if (material.isItem()) {
+                itemStack = new ItemStack(material);
+            } else {
+                var blockType = material.asBlockType();
+                if (blockType != null && blockType.hasItemType()) {
+                    itemStack = blockType.getItemType().createItemStack();
+                } else {
+                    itemStack = new ItemStack(Material.DIRT);
+                }
+            }
+
+            Supplier<String> supplier = claim.checkPermission(player, ClaimPermission.Build, new BlockPlaceEvent(block, block.getState(), block, itemStack, player, true, EquipmentSlot.HAND));
 
             if (supplier == null) return null;
 
@@ -3219,8 +3232,8 @@ public class GriefPrevention extends JavaPlugin
         }
         else
         {
-            BanList bans = Bukkit.getServer().getBanList(Type.NAME);
-            bans.addBan(player.getName(), reason, (Date) null, source);
+            BanList<PlayerProfile> bans = Bukkit.getServer().getBanList(Type.PROFILE);
+            bans.addBan(player.getPlayerProfile(), reason, (Date) null, source);
 
             //kick
             if (player.isOnline())

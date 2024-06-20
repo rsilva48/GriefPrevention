@@ -2437,10 +2437,7 @@ class PlayerEventHandler implements Listener
         {
             result = iterator.next();
             Material type = result.getType();
-            if (type != Material.AIR &&
-                    (!passThroughWater || type != Material.WATER) &&
-                    type != Material.SHORT_GRASS &&
-                    type != Material.SNOW) return result;
+            if (!Tag.REPLACEABLE.isTagged(type) || (!passThroughWater && type == Material.WATER)) return result;
         }
 
         return result;
