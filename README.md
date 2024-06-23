@@ -39,3 +39,4 @@ Stop _responding_ to grief and prevent it instead. GriefPrevention stops grief b
 
 [![Weird flex but ok](https://bstats.org/signatures/bukkit/GriefPrevention-legacy.svg)](https://bstats.org/plugin/bukkit/GriefPrevention-legacy)
 "# Trigger GitHub Actions" 
+"# Trigger GitHub Actions" 
